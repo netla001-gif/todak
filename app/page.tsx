@@ -39,12 +39,22 @@ export default function Home() {
   const [origin, setOrigin] = useState("강동구청");
   const [profile, setProfile] = useState({ month:18, gender:"none" as Gender, origin:"강동구청" });
   const [category, setCategory] = useState<Category>("all");
-  const recommendations = useMemo(() => rankPlaces(places, profile.month, profile.origin).filter((place: Place) => category === "all" || place.category === category || (category === "free" && place.price.includes("무료"))), [profile, category]);
+  const [liveDrive, setLiveDrive] = useState<Record<string, number>>({});
+  const [loadingDrive, setLoadingDrive] = useState(false);
+  const recommendations = useMemo(() => rankPlaces(places.map((place) => liveDrive[place.id] ? { ...place, drive:{ ...place.drive, [profile.origin]:liveDrive[place.id] } } : place), profile.month, profile.origin).filter((place: Place) => category === "all" || place.category === category || (category === "free" && place.price.includes("무료"))), [profile, category, liveDrive]);
 
-  function submitProfile(event: FormEvent) {
+  async function submitProfile(event: FormEvent) {
     event.preventDefault();
     setProfile({ month, gender, origin });
+    setLiveDrive({});
+    setLoadingDrive(true);
     document.querySelector("#feed")?.scrollIntoView({ behavior:"smooth" });
+    try {
+      const response = await fetch("/api/drive-times", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ origin, places:places.map(({ id,title,district }) => ({ id, query:`${district} ${title}` })) }) });
+      if (response.ok) setLiveDrive((await response.json()).times ?? {});
+    } finally {
+      setLoadingDrive(false);
+    }
   }
 
   return <main>
@@ -74,13 +84,13 @@ export default function Home() {
         </fieldset>
         <label className="field-label" htmlFor="origin">출발 지역</label>
         <select id="origin" value={origin} onChange={(event) => setOrigin(event.target.value)}>{origins.map((item) => <option key={item}>{item}</option>)}</select>
-        <button className="primary" type="submit">맞춤 피드 보기</button>
+        <button className="primary" type="submit" disabled={loadingDrive}>{loadingDrive ? "자차 시간 확인 중…" : "맞춤 피드 보기"}</button>
       </form>
     </section>
 
     <section className="feed-section" id="feed">
       <div className="feed-heading">
-        <div><p className="eyebrow">{profile.origin} 출발 예시</p><h2>가까우면서 잘 맞는 순서예요</h2></div>
+        <div><p className="eyebrow">{profile.origin} 출발 · {Object.keys(liveDrive).length ? "실시간 길찾기" : "예상 시간"}</p><h2>가까우면서 잘 맞는 순서예요</h2></div>
         <p>월령 45% · 자차시간 35% · 편의성 15% · 공식정보 5%</p>
       </div>
       <div className="filters" aria-label="장소 유형 필터">
@@ -90,7 +100,7 @@ export default function Home() {
         {recommendations.map((place: Place & {driveMinutes:number;score:number}, index:number) => <article className="place-card" key={place.id}>
           <div className="photo"><img src={place.image} alt="" /><span>{index + 1}위 추천</span></div>
           <div className="place-body">
-            <div className="meta"><b>차로 약 {place.driveMinutes}분</b><span>{place.district} · {place.price}</span></div>
+            <div className="meta"><b>{liveDrive[place.id] ? "실시간 " : "차로 약 "}{place.driveMinutes}분</b><span>{place.district} · {place.price}</span></div>
             <h3>{place.title}</h3><p>{place.description}</p>
             <div className="facts">{place.facts.map((fact) => <span key={fact}>{fact}</span>)}</div>
             <div className="match"><span>월령·거리 적합도</span><strong>{place.score}점</strong></div>
@@ -98,7 +108,7 @@ export default function Home() {
           </div>
         </article>)}
       </div>
-      <p className="data-note">이동시간은 지도 API 연결 전 강동구 내 출발지별 예시입니다. 운영시간과 예약 가능 여부는 방문 전 공식 페이지에서 확인해 주세요.</p>
+      <p className="data-note">카카오 길찾기가 연결되면 현재 도로 기준 시간을, 연결되지 않은 장소는 지역별 예상 시간을 보여드려요. 운영시간과 예약 가능 여부는 방문 전 공식 페이지에서 확인해 주세요.</p>
     </section>
   </main>;
 }
