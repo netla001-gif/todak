@@ -26,3 +26,11 @@ test("uses current coordinates to rank nearby places without a route API", () =>
   assert.ok(Math.abs(distanceKm(current, places[0].location) - 1.11) < .02);
   assert.ok(ranked[0].distanceKm < ranked[1].distanceKm);
 });
+
+test("moves a preferred place above an otherwise equal place", () => {
+  const places = [
+    { id:"plain", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },
+    { id:"saved", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },
+  ];
+  assert.equal(rankPlaces(places, 18, "강동구청", null, ["saved"])[0].id, "saved");
+});

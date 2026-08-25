@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { rankPlaces } from "@/lib/recommendation.mjs";
 
 type Gender = "girl" | "boy" | "none";
@@ -40,6 +40,7 @@ const places: Place[] = [
 ];
 
 type Coordinates = { lat:number; lng:number };
+type Preferences = { saved:string[]; hidden:string[] };
 type LocatedPlace = Place & { location:Coordinates };
 
 const placeCoordinates: Record<string, Coordinates> = {
@@ -80,7 +81,30 @@ export default function Home() {
   const [category, setCategory] = useState<Category>("all");
   const [liveDrive, setLiveDrive] = useState<Record<string, number>>({});
   const [checkingDrive, setCheckingDrive] = useState("");
-  const recommendations = useMemo(() => rankPlaces(locatedPlaces, profile.month, profile.origin, profile.location).filter((place: LocatedPlace) => category === "all" || place.category === category || (category === "free" && place.price.includes("무료"))), [profile, category]);
+  const [preferences, setPreferences] = useState<Preferences>({ saved:[], hidden:[] });
+  const recommendations = useMemo(() => rankPlaces(locatedPlaces, profile.month, profile.origin, profile.location, preferences.saved).filter((place: LocatedPlace) => !preferences.hidden.includes(place.id) && (category === "all" || place.category === category || (category === "free" && place.price.includes("무료")))), [profile, category, preferences]);
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("todak-preferences") ?? "{}");
+      setPreferences({
+        saved:Array.isArray(stored.saved) ? stored.saved.filter((id:unknown) => typeof id === "string") : [],
+        hidden:Array.isArray(stored.hidden) ? stored.hidden.filter((id:unknown) => typeof id === "string") : []
+      });
+    } catch {}
+  }, []);
+
+  function updatePreference(id: string, action: "saved" | "hidden" | "restore") {
+    setPreferences((current) => {
+      const next = action === "saved"
+        ? { saved:current.saved.includes(id) ? current.saved.filter((item) => item !== id) : [...current.saved, id], hidden:current.hidden.filter((item) => item !== id) }
+        : action === "hidden"
+          ? { saved:current.saved.filter((item) => item !== id), hidden:[...new Set([...current.hidden, id])] }
+          : { ...current, hidden:[] };
+      try { localStorage.setItem("todak-preferences", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
 
   function submitProfile(event: FormEvent) {
     event.preventDefault();
@@ -148,10 +172,11 @@ export default function Home() {
     <section className="feed-section" id="feed">
       <div className="feed-heading">
         <div><p className="eyebrow">{profile.location ? "현재 위치 · 직선거리 기준" : `${profile.origin} 출발 · 예상 시간`}</p><h2>가까우면서 잘 맞는 순서예요</h2></div>
-        <p>월령 45% · 자차시간 35% · 편의성 15% · 공식정보 5%</p>
+        <p>월령·거리 기본 추천 + 내가 고른 취향 반영</p>
       </div>
       <div className="filters" aria-label="장소 유형 필터">
         {([["all","전체"],["indoor","실내"],["outdoor","야외"],["free","무료"]] as const).map(([value,label]) => <button key={value} className={category === value ? "active" : ""} onClick={() => setCategory(value)}>{label}</button>)}
+        {preferences.hidden.length > 0 && <button className="restore-button" onClick={() => updatePreference("", "restore")}>숨긴 장소 {preferences.hidden.length}개 다시 보기</button>}
       </div>
       <div className="feed-grid">
         {recommendations.map((place: LocatedPlace & {driveMinutes:number;distanceKm:number|null;score:number;reason:string}, index:number) => <article className="place-card" key={place.id}>
@@ -160,6 +185,10 @@ export default function Home() {
             <div className="meta"><b>{liveDrive[place.id] ? `실시간 ${liveDrive[place.id]}분` : place.distanceKm !== null ? `직선 ${place.distanceKm.toFixed(1)}km` : `차로 약 ${place.driveMinutes}분`}</b><span>{place.district} · {place.price}</span></div>
             <h3>{place.title}</h3><p>{place.description}</p>
             <div className="facts">{place.facts.map((fact) => <span key={fact}>{fact}</span>)}</div>
+            <div className="preference-actions">
+              <button type="button" aria-pressed={preferences.saved.includes(place.id)} onClick={() => updatePreference(place.id, "saved")}>{preferences.saved.includes(place.id) ? "♥ 가보고 싶음" : "♡ 가보고 싶음"}</button>
+              <button type="button" onClick={() => updatePreference(place.id, "hidden")}>관심 없음</button>
+            </div>
             <p className="reason"><b>왜 추천?</b> {place.reason}</p>
             <div className="match"><span>월령·거리 적합도</span><strong>{place.score}점</strong></div>
             <button className="drive-button" type="button" disabled={checkingDrive === place.id} onClick={() => checkDrive(place)}>{checkingDrive === place.id ? "확인 중…" : liveDrive[place.id] ? "자차 시간 다시 보기" : "실제 자차 시간 보기"}</button>
