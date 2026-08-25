@@ -39,27 +39,76 @@ const places: Place[] = [
   ,{ id:"guri-donggureung", title:"구리 동구릉", district:"구리시", category:"outdoor", minMonth:18, maxMonth:48, price:"만 6세 이하 무료", convenience:.75, image:"https://images.pexels.com/photos/27176993/pexels-photo-27176993/free-photo-of-happy-family-picnic-in-the-park.jpeg?auto=compress&fit=crop&w=1200&h=760", description:"숲길과 넓은 능역을 따라 아이와 조용히 걷기 좋은 세계유산 산책 코스예요.", facts:["숲길","역사산책","주차"], drive:{강동구청:31,천호동:28,암사동:24,고덕동:29,상일동:31}, url:"https://www.guri.go.kr/culture/index.do" }
 ];
 
+type Coordinates = { lat:number; lng:number };
+type LocatedPlace = Place & { location:Coordinates };
+
+const placeCoordinates: Record<string, Coordinates> = {
+  "gildong-eco":{ lat:37.54081566319114, lng:127.15541883551022 },
+  "imom-seongnae":{ lat:37.5291630951155, lng:127.122428670511 },
+  "imom-godeok":{ lat:37.5569820102903, lng:127.15697461704 },
+  "amsa-prehistory":{ lat:37.5605464139303, lng:127.130257802123 },
+  "olympic-park":{ lat:37.51428559775014, lng:127.11633482132808 },
+  "songpa-book":{ lat:37.49888597821397, lng:127.10438467827207 },
+  "seoul-children-museum":{ lat:37.5508665042994, lng:127.077592558039 },
+  "hanam-union":{ lat:37.5468164299143, lng:127.219481069891 },
+  "imom-cheonho":{ lat:37.5434578953048, lng:127.125448391172 },
+  "imom-gil":{ lat:37.5383628852452, lng:127.140524673607 },
+  "imom-sangil":{ lat:37.55673355938838, lng:127.17232065064566 },
+  "imom-sangil-2":{ lat:37.55517011378766, lng:127.17971855171162 },
+  "imom-seongnae-2":{ lat:37.535992790021524, lng:127.1282667448609 },
+  "imom-amsa":{ lat:37.55145457837783, lng:127.132574354499 },
+  "children-grand-park":{ lat:37.5482386958136, lng:127.082318892024 },
+  "jamsil-hangang":{ lat:37.5177992564873, lng:127.082357837214 },
+  "misa-lake":{ lat:37.56165131759957, lng:127.18817527646752 },
+  "tree-orphanage":{ lat:37.5816045145693, lng:127.195514124075 },
+  "guri-jangja":{ lat:37.5858048257013, lng:127.141279538004 },
+  "guri-insect":{ lat:37.5900077285893, lng:127.16048600935027 },
+  "guri-forge":{ lat:37.5605552233289, lng:127.111057789347 },
+  "guri-eco-center":{ lat:37.5830833927075, lng:127.138607047366 },
+  "guri-hangang":{ lat:37.5756256414086, lng:127.142582525106 },
+  "guri-donggureung":{ lat:37.61941522307722, lng:127.13205042833934 },
+};
+const locatedPlaces: LocatedPlace[] = places.map((place) => ({ ...place, location:placeCoordinates[place.id] }));
+
 export default function Home() {
   const [month, setMonth] = useState(18);
   const [gender, setGender] = useState<Gender>("none");
   const [origin, setOrigin] = useState("강동구청");
-  const [profile, setProfile] = useState({ month:18, gender:"none" as Gender, origin:"강동구청" });
+  const [location, setLocation] = useState<Coordinates | null>(null);
+  const [locationStatus, setLocationStatus] = useState("");
+  const [profile, setProfile] = useState({ month:18, gender:"none" as Gender, origin:"강동구청", location:null as Coordinates | null });
   const [category, setCategory] = useState<Category>("all");
   const [liveDrive, setLiveDrive] = useState<Record<string, number>>({});
-  const [loadingDrive, setLoadingDrive] = useState(false);
-  const recommendations = useMemo(() => rankPlaces(places.map((place) => liveDrive[place.id] ? { ...place, drive:{ ...place.drive, [profile.origin]:liveDrive[place.id] } } : place), profile.month, profile.origin).filter((place: Place) => category === "all" || place.category === category || (category === "free" && place.price.includes("무료"))), [profile, category, liveDrive]);
+  const [checkingDrive, setCheckingDrive] = useState("");
+  const recommendations = useMemo(() => rankPlaces(locatedPlaces, profile.month, profile.origin, profile.location).filter((place: LocatedPlace) => category === "all" || place.category === category || (category === "free" && place.price.includes("무료"))), [profile, category]);
 
-  async function submitProfile(event: FormEvent) {
+  function submitProfile(event: FormEvent) {
     event.preventDefault();
-    setProfile({ month, gender, origin });
+    setProfile({ month, gender, origin, location });
     setLiveDrive({});
-    setLoadingDrive(true);
     document.querySelector("#feed")?.scrollIntoView({ behavior:"smooth" });
+  }
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) return setLocationStatus("이 브라우저는 위치 찾기를 지원하지 않아요.");
+    setLocationStatus("현재 위치를 찾는 중…");
+    navigator.geolocation.getCurrentPosition(({ coords }) => {
+      setLocation({ lat:coords.latitude, lng:coords.longitude });
+      setLocationStatus("현재 위치를 찾았어요. 피드 보기를 눌러주세요.");
+    }, () => setLocationStatus("위치를 찾지 못했어요. 아래 출발 지역으로 추천할게요."), { enableHighAccuracy:false, timeout:8000 });
+  }
+
+  async function checkDrive(place: LocatedPlace) {
+    setCheckingDrive(place.id);
     try {
-      const response = await fetch("/api/drive-times", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ origin, places:places.map(({ id,title,district }) => ({ id, query:`${district} ${title}` })) }) });
-      if (response.ok) setLiveDrive((await response.json()).times ?? {});
+      const routeOrigin = profile.location ? { x:profile.location.lng, y:profile.location.lat } : profile.origin;
+      const response = await fetch("/api/drive-times", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ origin:routeOrigin, places:[{ id:place.id, x:place.location.lng, y:place.location.lat }] }) });
+      if (response.ok) {
+        const data = await response.json();
+        setLiveDrive((current) => ({ ...current, ...(data.times ?? {}) }));
+      }
     } finally {
-      setLoadingDrive(false);
+      setCheckingDrive("");
     }
   }
 
@@ -74,7 +123,7 @@ export default function Home() {
         <p className="eyebrow">이번 주말 고민, 10초 만에 끝</p>
         <h1><strong>{profile.month}개월 아기</strong>와<br />오늘 어디 갈까?</h1>
         <p className="hero-description">월령에 맞고 차로 가까운 장소부터 보여드려요. 강동구와 가까운 송파·광진·하남까지 골랐어요.</p>
-        <div className="area-list"><span>강동구</span><span>송파구</span><span>광진구</span><span>하남시</span></div>
+        <div className="area-list"><span>강동구</span><span>송파구</span><span>광진구</span><span>하남시</span><span>구리시</span></div>
       </div>
 
       <form className="profile-card" onSubmit={submitProfile}>
@@ -89,33 +138,36 @@ export default function Home() {
           </div>
         </fieldset>
         <label className="field-label" htmlFor="origin">출발 지역</label>
-        <select id="origin" value={origin} onChange={(event) => setOrigin(event.target.value)}>{origins.map((item) => <option key={item}>{item}</option>)}</select>
-        <button className="primary" type="submit" disabled={loadingDrive}>{loadingDrive ? "자차 시간 확인 중…" : "맞춤 피드 보기"}</button>
+        <button className="location-button" type="button" onClick={useCurrentLocation}>{location ? "✓ 현재 위치 사용 중" : "내 위치 사용하기"}</button>
+        {locationStatus && <p className="location-status" role="status">{locationStatus}</p>}
+        <select id="origin" value={origin} onChange={(event) => { setOrigin(event.target.value); setLocation(null); setLocationStatus("선택한 지역을 기준으로 추천해요."); }}>{origins.map((item) => <option key={item}>{item}</option>)}</select>
+        <button className="primary" type="submit">맞춤 피드 보기</button>
       </form>
     </section>
 
     <section className="feed-section" id="feed">
       <div className="feed-heading">
-        <div><p className="eyebrow">{profile.origin} 출발 · {Object.keys(liveDrive).length ? "실시간 길찾기" : "예상 시간"}</p><h2>가까우면서 잘 맞는 순서예요</h2></div>
+        <div><p className="eyebrow">{profile.location ? "현재 위치 · 직선거리 기준" : `${profile.origin} 출발 · 예상 시간`}</p><h2>가까우면서 잘 맞는 순서예요</h2></div>
         <p>월령 45% · 자차시간 35% · 편의성 15% · 공식정보 5%</p>
       </div>
       <div className="filters" aria-label="장소 유형 필터">
         {([["all","전체"],["indoor","실내"],["outdoor","야외"],["free","무료"]] as const).map(([value,label]) => <button key={value} className={category === value ? "active" : ""} onClick={() => setCategory(value)}>{label}</button>)}
       </div>
       <div className="feed-grid">
-        {recommendations.map((place: Place & {driveMinutes:number;score:number;reason:string}, index:number) => <article className="place-card" key={place.id}>
+        {recommendations.map((place: LocatedPlace & {driveMinutes:number;distanceKm:number|null;score:number;reason:string}, index:number) => <article className="place-card" key={place.id}>
           <div className="photo"><img src={place.image} alt="" /><span>{index + 1}위 추천</span></div>
           <div className="place-body">
-            <div className="meta"><b>{liveDrive[place.id] ? "실시간 " : "차로 약 "}{place.driveMinutes}분</b><span>{place.district} · {place.price}</span></div>
+            <div className="meta"><b>{liveDrive[place.id] ? `실시간 ${liveDrive[place.id]}분` : place.distanceKm !== null ? `직선 ${place.distanceKm.toFixed(1)}km` : `차로 약 ${place.driveMinutes}분`}</b><span>{place.district} · {place.price}</span></div>
             <h3>{place.title}</h3><p>{place.description}</p>
             <div className="facts">{place.facts.map((fact) => <span key={fact}>{fact}</span>)}</div>
             <p className="reason"><b>왜 추천?</b> {place.reason}</p>
             <div className="match"><span>월령·거리 적합도</span><strong>{place.score}점</strong></div>
+            <button className="drive-button" type="button" disabled={checkingDrive === place.id} onClick={() => checkDrive(place)}>{checkingDrive === place.id ? "확인 중…" : liveDrive[place.id] ? "자차 시간 다시 보기" : "실제 자차 시간 보기"}</button>
             <a href={place.url} target="_blank" rel="noreferrer">공식 정보 확인 <span aria-hidden="true">↗</span></a>
           </div>
         </article>)}
       </div>
-      <p className="data-note">카카오 길찾기가 연결되면 현재 도로 기준 시간을, 연결되지 않은 장소는 지역별 예상 시간을 보여드려요. 운영시간과 예약 가능 여부는 방문 전 공식 페이지에서 확인해 주세요.</p>
+      <p className="data-note">피드는 현재 위치와 장소의 직선거리로 빠르게 정렬하며, 위치는 서버에 저장하지 않아요. 실제 자차 시간은 원하는 카드에서 눌렀을 때만 카카오 길찾기로 확인합니다. 운영시간과 예약 가능 여부는 방문 전 공식 페이지에서 확인해 주세요.</p>
     </section>
   </main>;
 }
