@@ -46,6 +46,16 @@ test("shows only the best matching iMom Gangdong branch", () => {
   assert.equal(ranked.find((place) => place.id.startsWith("imom-"))?.id, "imom-near");
 });
 
+test("ranks by the worst-fitting child when multiple children's ages are given", () => {
+  const places = [
+    { id:"fits-both", minMonth:6, maxMonth:30, convenience:1, drive:{강동구청:10} },
+    { id:"fits-younger-only", minMonth:6, maxMonth:10, convenience:1, drive:{강동구청:10} },
+  ];
+  const ranked = rankPlaces(places, [6, 30], "강동구청");
+  assert.equal(ranked[0].id, "fits-both");
+  assert.ok(ranked[0].score > ranked[1].score);
+});
+
 test("hides a place the family disliked after visiting", () => {
   const places = [
     { id:"loved", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },

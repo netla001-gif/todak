@@ -9,7 +9,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const image = protocol + "://" + host + "/og.png";
   return {
     title: "토닥 | 강동구 아기 나들이 추천",
-    description: "아기 월령과 강동구 출발 지역에 맞춰 가까운 나들이 장소를 추천합니다.",
+    description: "아이 월령과 지금 계신 위치에 맞춰 가까운 나들이 장소를 추천합니다.",
     icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
     openGraph: { title: "토닥 | 아기와 오늘, 어디 갈까?", description: "강동구에서 가까운 아기 나들이 추천", images: [image] },
     twitter: { card: "summary_large_image", title: "토닥 | 아기와 오늘, 어디 갈까?", description: "강동구에서 가까운 아기 나들이 추천", images: [image] },

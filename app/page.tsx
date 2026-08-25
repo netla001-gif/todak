@@ -3,16 +3,18 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { rankPlaces } from "@/lib/recommendation.mjs";
 
-type Gender = "girl" | "boy" | "none";
 type Category = "all" | "indoor" | "outdoor" | "free";
 type Rating = "liked" | "disliked";
+type Child = { id: string; month: number };
 type Place = {
   id: string; title: string; district: string; category: "indoor" | "outdoor";
   minMonth: number; maxMonth: number; price: string; convenience: number;
   image: string; description: string; facts: string[]; drive: Record<string, number>; url: string;
 };
 
-const origins = ["강동구청", "천호동", "암사동", "고덕동", "상일동"];
+// Static drive-minute estimates below are keyed to this origin; it's the fallback
+// used whenever the visitor hasn't shared their location.
+const DEFAULT_ORIGIN = "강동구청";
 const places: Place[] = [
   { id:"gildong-eco", title:"길동생태공원", district:"강동구", category:"outdoor", minMonth:8, maxMonth:48, price:"무료", convenience:.72, image:"https://images.pexels.com/photos/27176993/pexels-photo-27176993/free-photo-of-happy-family-picnic-in-the-park.jpeg?auto=compress&fit=crop&w=1200&h=760", description:"숲길과 연못을 천천히 둘러보며 풀잎, 새, 곤충을 만나는 생태 산책이에요.", facts:["사전예약","자연관찰","야외"], drive:{강동구청:8,천호동:12,암사동:10,고덕동:9,상일동:11}, url:"https://parks.seoul.go.kr/maps/gildong/gildong_map.pdf" },
   { id:"imom-seongnae", title:"아이맘강동 성내1동점", district:"강동구", category:"indoor", minMonth:6, maxMonth:48, price:"2,000원", convenience:.96, image:"https://images.pexels.com/photos/5865565/pexels-photo-5865565.jpeg?auto=compress&fit=crop&w=1200&h=760", description:"영유아가 보호자와 함께 안전하게 움직이고 놀 수 있는 공공형 실내놀이터예요.", facts:["예약제","실내","영유아 맞춤"], drive:{강동구청:4,천호동:7,암사동:11,고덕동:15,상일동:18}, url:"https://gangdong.go.kr/web/newportal/contents/gdp_005_001_005_007_004" },
@@ -72,20 +74,32 @@ const placeCoordinates: Record<string, Coordinates> = {
 };
 const locatedPlaces: LocatedPlace[] = places.map((place) => ({ ...place, location:placeCoordinates[place.id] }));
 
+const DEFAULT_CHILDREN: Child[] = [{ id:"child-1", month:18 }];
+
+function loadStoredChildren(): Child[] {
+  try {
+    const stored = JSON.parse(localStorage.getItem("todak-profile") ?? "{}");
+    const children = Array.isArray(stored.children)
+      ? stored.children.filter((child: unknown): child is Child => !!child && typeof (child as Child).id === "string" && Number.isFinite((child as Child).month))
+      : [];
+    return children.length ? children : DEFAULT_CHILDREN;
+  } catch {
+    return DEFAULT_CHILDREN;
+  }
+}
+
 export default function Home() {
-  const [month, setMonth] = useState(18);
-  const [gender, setGender] = useState<Gender>("none");
-  const [origin, setOrigin] = useState("강동구청");
+  const [children, setChildren] = useState<Child[]>(DEFAULT_CHILDREN);
   const [location, setLocation] = useState<Coordinates | null>(null);
   const [locationStatus, setLocationStatus] = useState("");
-  const [profile, setProfile] = useState({ month:18, gender:"none" as Gender, origin:"강동구청", location:null as Coordinates | null });
+  const [profile, setProfile] = useState({ children:DEFAULT_CHILDREN, location:null as Coordinates | null });
   const [category, setCategory] = useState<Category>("all");
   const [liveDrive, setLiveDrive] = useState<Record<string, number>>({});
   const [checkingDrive, setCheckingDrive] = useState("");
   const [preferences, setPreferences] = useState<Preferences>({ saved:[], hidden:[] });
   const [feedback, setFeedback] = useState<Record<string, Rating>>({});
   const [ratingTarget, setRatingTarget] = useState<string | null>(null);
-  const recommendations = useMemo(() => rankPlaces(locatedPlaces, profile.month, profile.origin, profile.location, preferences.saved, feedback).filter((place: LocatedPlace) => !preferences.hidden.includes(place.id) && (category === "all" || place.category === category || (category === "free" && place.price.includes("무료")))), [profile, category, preferences, feedback]);
+  const recommendations = useMemo(() => rankPlaces(locatedPlaces, profile.children.map((child) => child.month), DEFAULT_ORIGIN, profile.location, preferences.saved, feedback).filter((place: LocatedPlace) => !preferences.hidden.includes(place.id) && (category === "all" || place.category === category || (category === "free" && place.price.includes("무료")))), [profile, category, preferences, feedback]);
 
   useEffect(() => {
     try {
@@ -100,6 +114,24 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/feedback").then((response) => response.ok ? response.json() : { feedback:{} }).then((data) => setFeedback(data.feedback ?? {})).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const stored = loadStoredChildren();
+    setChildren(stored);
+    setProfile((current) => ({ ...current, children:stored }));
+  }, []);
+
+  function addChild() {
+    setChildren((current) => [...current, { id:`child-${Date.now()}`, month:18 }]);
+  }
+
+  function removeChild(id: string) {
+    setChildren((current) => current.length > 1 ? current.filter((child) => child.id !== id) : current);
+  }
+
+  function updateChildMonth(id: string, month: number) {
+    setChildren((current) => current.map((child) => child.id === id ? { ...child, month } : child));
+  }
 
   function submitFeedback(placeId: string, rating: Rating) {
     setFeedback((current) => ({ ...current, [placeId]:rating }));
@@ -121,7 +153,8 @@ export default function Home() {
 
   function submitProfile(event: FormEvent) {
     event.preventDefault();
-    setProfile({ month, gender, origin, location });
+    setProfile({ children, location });
+    try { localStorage.setItem("todak-profile", JSON.stringify({ children })); } catch {}
     setLiveDrive({});
     document.querySelector("#feed")?.scrollIntoView({ behavior:"smooth" });
   }
@@ -132,13 +165,13 @@ export default function Home() {
     navigator.geolocation.getCurrentPosition(({ coords }) => {
       setLocation({ lat:coords.latitude, lng:coords.longitude });
       setLocationStatus("현재 위치를 찾았어요. 피드 보기를 눌러주세요.");
-    }, () => setLocationStatus("위치를 찾지 못했어요. 아래 출발 지역으로 추천할게요."), { enableHighAccuracy:false, timeout:8000 });
+    }, () => setLocationStatus(`위치를 찾지 못했어요. ${DEFAULT_ORIGIN} 기준으로 추천할게요.`), { enableHighAccuracy:false, timeout:8000 });
   }
 
   async function checkDrive(place: LocatedPlace) {
     setCheckingDrive(place.id);
     try {
-      const routeOrigin = profile.location ? { x:profile.location.lng, y:profile.location.lat } : profile.origin;
+      const routeOrigin = profile.location ? { x:profile.location.lng, y:profile.location.lat } : DEFAULT_ORIGIN;
       const response = await fetch("/api/drive-times", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ origin:routeOrigin, places:[{ id:place.id, x:place.location.lng, y:place.location.lat }] }) });
       if (response.ok) {
         const data = await response.json();
@@ -158,33 +191,31 @@ export default function Home() {
     <section className="hero" id="top">
       <div className="hero-copy">
         <p className="eyebrow">이번 주말 고민, 10초 만에 끝</p>
-        <h1><strong>{profile.month}개월 아기</strong>와<br />오늘 어디 갈까?</h1>
+        <h1><strong>우리 아이</strong>와<br />오늘 어디 갈까?</h1>
         <p className="hero-description">월령에 맞고 차로 가까운 장소부터 보여드려요. 강동구와 가까운 송파·광진·하남까지 골랐어요.</p>
         <div className="area-list"><span>강동구</span><span>송파구</span><span>광진구</span><span>하남시</span><span>구리시</span></div>
       </div>
 
       <form className="profile-card" onSubmit={submitProfile}>
-        <div className="form-heading"><span>우리 아기 설정</span><b>성별은 추천 순위에 영향 없음</b></div>
-        <label className="field-label" htmlFor="month">월령 <strong>{month}개월</strong></label>
-        <input id="month" type="range" min="1" max="48" value={month} onChange={(event) => setMonth(Number(event.target.value))} />
-        <div className="range-label"><span>1개월</span><span>48개월</span></div>
-        <fieldset>
-          <legend>성별 <small>선택</small></legend>
-          <div className="segments">
-            {([["girl","여아"],["boy","남아"],["none","선택 안 함"]] as const).map(([value,label]) => <button key={value} type="button" className={gender === value ? "active" : ""} onClick={() => setGender(value)}>{label}</button>)}
-          </div>
-        </fieldset>
-        <label className="field-label" htmlFor="origin">출발 지역</label>
-        <button className="location-button" type="button" onClick={useCurrentLocation}>{location ? "✓ 현재 위치 사용 중" : "내 위치 사용하기"}</button>
+        <div className="form-heading"><span>우리 아이 설정</span><b>{children.length}명</b></div>
+        <div className="children-list">
+          {children.map((child, index) => <div className="child-row" key={child.id}>
+            <label className="field-label" htmlFor={`month-${child.id}`}>{index + 1}번째 아이 <strong>{child.month}개월</strong></label>
+            <input id={`month-${child.id}`} type="range" min="1" max="48" value={child.month} onChange={(event) => updateChildMonth(child.id, Number(event.target.value))} />
+            {children.length > 1 && <button type="button" className="remove-child-button" onClick={() => removeChild(child.id)}>이 아이 삭제</button>}
+          </div>)}
+        </div>
+        <button type="button" className="add-child-button" onClick={addChild}>+ 아이 추가</button>
+        <label className="field-label" htmlFor="location-button">지금 있는 곳</label>
+        <button id="location-button" className="location-button" type="button" onClick={useCurrentLocation}>{location ? "✓ 현재 위치 사용 중" : "내 위치 사용하기"}</button>
         {locationStatus && <p className="location-status" role="status">{locationStatus}</p>}
-        <select id="origin" value={origin} onChange={(event) => { setOrigin(event.target.value); setLocation(null); setLocationStatus("선택한 지역을 기준으로 추천해요."); }}>{origins.map((item) => <option key={item}>{item}</option>)}</select>
         <button className="primary" type="submit">맞춤 피드 보기</button>
       </form>
     </section>
 
     <section className="feed-section" id="feed">
       <div className="feed-heading">
-        <div><p className="eyebrow">{profile.location ? "현재 위치 · 직선거리 기준" : `${profile.origin} 출발 · 예상 시간`}</p><h2>가까우면서 잘 맞는 순서예요</h2></div>
+        <div><p className="eyebrow">{profile.location ? "현재 위치 · 직선거리 기준" : `${DEFAULT_ORIGIN} 출발 · 예상 시간`}</p><h2>가까우면서 잘 맞는 순서예요</h2></div>
         <p>월령·거리 기본 추천 + 내가 고른 취향 반영</p>
       </div>
       <div className="filters" aria-label="장소 유형 필터">
