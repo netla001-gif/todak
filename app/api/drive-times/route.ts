@@ -13,6 +13,7 @@ async function point(query: string, key: string) {
 }
 
 export async function POST(request: Request) {
+  try {
   const key = process.env.KAKAO_REST_API_KEY;
   if (!key) return Response.json({ times:{}, live:false }, { status:503 });
 
@@ -22,7 +23,6 @@ export async function POST(request: Request) {
     return Response.json({ error:"잘못된 요청" }, { status:400 });
   }
 
-  try {
     // ponytail: 좌표를 요청마다 찾는다. 사용량이 늘면 장소 좌표를 데이터에 저장한다.
     const [origin, ...destinations] = await Promise.all([point(originQueries[body.origin], key), ...places.map((place: { query:string }) => point(place.query.slice(0, 80), key))]);
     const response = await fetch("https://apis-navi.kakaomobility.com/v1/destinations/directions", {
@@ -33,7 +33,8 @@ export async function POST(request: Request) {
     if (!response.ok) throw new Error("길찾기 실패");
     const times = durationsFromRoutes((await response.json()).routes);
     return Response.json({ times, live:Object.keys(times).length > 0 });
-  } catch {
+  } catch (error) {
+    console.error("drive-times failed", error instanceof Error ? error.message : String(error));
     return Response.json({ times:{}, live:false }, { status:502 });
   }
 }
