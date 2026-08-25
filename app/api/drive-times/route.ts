@@ -6,6 +6,7 @@ const originQueries: Record<string, string> = {
 
 async function point(query: string, key: string) {
   const response = await fetch("https://dapi.kakao.com/v2/local/search/keyword.json?size=1&query=" + encodeURIComponent(query), { headers:{ Authorization:"KakaoAK " + key } });
+  if (!response.ok) console.error("Kakao Local status", response.status);
   if (!response.ok) throw new Error("장소 검색 실패");
   const document = (await response.json()).documents?.[0];
   if (!document) throw new Error("장소 좌표 없음");
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       headers:{ Authorization:"KakaoAK " + key, "Content-Type":"application/json" },
       body:JSON.stringify({ origin, destinations:destinations.map((destination, index) => ({ ...destination, key:places[index].id })), radius:10000, priority:"TIME" })
     });
+    if (!response.ok) console.error("Kakao Mobility status", response.status);
     if (!response.ok) throw new Error("길찾기 실패");
     const times = durationsFromRoutes((await response.json()).routes);
     return Response.json({ times, live:Object.keys(times).length > 0 });
