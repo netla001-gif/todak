@@ -5,6 +5,7 @@ import { rankPlaces } from "@/lib/recommendation.mjs";
 
 type Gender = "girl" | "boy" | "none";
 type Category = "all" | "indoor" | "outdoor" | "free";
+type Rating = "liked" | "disliked";
 type Place = {
   id: string; title: string; district: string; category: "indoor" | "outdoor";
   minMonth: number; maxMonth: number; price: string; convenience: number;
@@ -82,7 +83,9 @@ export default function Home() {
   const [liveDrive, setLiveDrive] = useState<Record<string, number>>({});
   const [checkingDrive, setCheckingDrive] = useState("");
   const [preferences, setPreferences] = useState<Preferences>({ saved:[], hidden:[] });
-  const recommendations = useMemo(() => rankPlaces(locatedPlaces, profile.month, profile.origin, profile.location, preferences.saved).filter((place: LocatedPlace) => !preferences.hidden.includes(place.id) && (category === "all" || place.category === category || (category === "free" && place.price.includes("무료")))), [profile, category, preferences]);
+  const [feedback, setFeedback] = useState<Record<string, Rating>>({});
+  const [ratingTarget, setRatingTarget] = useState<string | null>(null);
+  const recommendations = useMemo(() => rankPlaces(locatedPlaces, profile.month, profile.origin, profile.location, preferences.saved, feedback).filter((place: LocatedPlace) => !preferences.hidden.includes(place.id) && (category === "all" || place.category === category || (category === "free" && place.price.includes("무료")))), [profile, category, preferences, feedback]);
 
   useEffect(() => {
     try {
@@ -93,6 +96,16 @@ export default function Home() {
       });
     } catch {}
   }, []);
+
+  useEffect(() => {
+    fetch("/api/feedback").then((response) => response.ok ? response.json() : { feedback:{} }).then((data) => setFeedback(data.feedback ?? {})).catch(() => {});
+  }, []);
+
+  function submitFeedback(placeId: string, rating: Rating) {
+    setFeedback((current) => ({ ...current, [placeId]:rating }));
+    setRatingTarget(null);
+    fetch("/api/feedback", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ placeId, rating }) }).catch(() => {});
+  }
 
   function updatePreference(id: string, action: "saved" | "hidden" | "restore") {
     setPreferences((current) => {
@@ -179,7 +192,7 @@ export default function Home() {
         {preferences.hidden.length > 0 && <button className="restore-button" onClick={() => updatePreference("", "restore")}>숨긴 장소 {preferences.hidden.length}개 다시 보기</button>}
       </div>
       <div className="feed-grid">
-        {recommendations.map((place: LocatedPlace & {driveMinutes:number;distanceKm:number|null;score:number;reason:string}, index:number) => <article className="place-card" key={place.id}>
+        {recommendations.map((place: LocatedPlace & {driveMinutes:number;distanceKm:number|null;score:number;reason:string;visited:Rating|null}, index:number) => <article className="place-card" key={place.id}>
           <div className="photo"><img src={place.image} alt="" /><span>{index + 1}위 추천</span></div>
           <div className="place-body">
             <div className="meta"><b>{liveDrive[place.id] ? `실시간 ${liveDrive[place.id]}분` : place.distanceKm !== null ? `직선 ${place.distanceKm.toFixed(1)}km` : `차로 약 ${place.driveMinutes}분`}</b><span>{place.district} · {place.price}</span></div>
@@ -192,6 +205,9 @@ export default function Home() {
             <p className="reason"><b>왜 추천?</b> {place.reason}</p>
             <div className="match"><span>월령·거리 적합도</span><strong>{place.score}점</strong></div>
             <button className="drive-button" type="button" disabled={checkingDrive === place.id} onClick={() => checkDrive(place)}>{checkingDrive === place.id ? "확인 중…" : liveDrive[place.id] ? "자차 시간 다시 보기" : "실제 자차 시간 보기"}</button>
+            {place.visited ? <p className="visited-note">{place.visited === "liked" ? "✓ 다녀왔어요 · 좋았어요" : "✓ 다녀왔어요 · 별로였어요"}</p>
+              : ratingTarget === place.id ? <div className="visit-rating"><span>어떠셨나요?</span><button type="button" onClick={() => submitFeedback(place.id, "liked")}>좋아요</button><button type="button" onClick={() => submitFeedback(place.id, "disliked")}>별로예요</button></div>
+              : <button className="visit-button" type="button" onClick={() => setRatingTarget(place.id)}>다녀왔어요</button>}
             <a href={place.url} target="_blank" rel="noreferrer">공식 정보 확인 <span aria-hidden="true">↗</span></a>
           </div>
         </article>)}
