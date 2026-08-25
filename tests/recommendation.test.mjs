@@ -45,3 +45,38 @@ test("shows only the best matching iMom Gangdong branch", () => {
   assert.equal(ranked.filter((place) => place.id.startsWith("imom-")).length, 1);
   assert.equal(ranked.find((place) => place.id.startsWith("imom-"))?.id, "imom-near");
 });
+
+test("hides a place the family disliked after visiting", () => {
+  const places = [
+    { id:"loved", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },
+    { id:"disliked", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },
+  ];
+  const ranked = rankPlaces(places, 18, "강동구청", null, [], { disliked:"disliked" });
+  assert.deepEqual(ranked.map((place) => place.id), ["loved"]);
+});
+
+test("pushes an already-visited liked place below a fresh equally-fit place", () => {
+  const places = [
+    { id:"visited", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },
+    { id:"fresh", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },
+  ];
+  const ranked = rankPlaces(places, 18, "강동구청", null, [], { visited:"liked" });
+  assert.equal(ranked[0].id, "fresh");
+  assert.equal(ranked[1].id, "visited");
+  assert.equal(ranked[1].visited, "liked");
+  assert.match(ranked[1].reason, /다녀온 곳/);
+});
+
+test("nudges fresh, unvisited places toward the category the family liked visiting", () => {
+  const places = [
+    { id:"past-outdoor-1", category:"outdoor", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },
+    { id:"past-outdoor-2", category:"outdoor", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },
+    { id:"fresh-outdoor", category:"outdoor", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },
+    { id:"fresh-indoor", category:"indoor", minMonth:6, maxMonth:24, convenience:1, drive:{강동구청:10} },
+  ];
+  const feedback = { "past-outdoor-1":"liked", "past-outdoor-2":"liked" };
+  const ranked = rankPlaces(places, 18, "강동구청", null, [], feedback);
+  const freshOutdoorRank = ranked.findIndex((place) => place.id === "fresh-outdoor");
+  const freshIndoorRank = ranked.findIndex((place) => place.id === "fresh-indoor");
+  assert.ok(freshOutdoorRank < freshIndoorRank);
+});
