@@ -6,6 +6,10 @@ import { rankPlaces } from "@/lib/recommendation.mjs";
 type Category = "all" | "indoor" | "outdoor" | "free";
 type Rating = "liked" | "disliked";
 type Child = { id: string; month: number };
+
+function naverMapSearchUrl(title: string) {
+  return `https://map.naver.com/p/search/${encodeURIComponent(title)}`;
+}
 type Place = {
   id: string; title: string; district: string; category: "indoor" | "outdoor";
   minMonth: number; maxMonth: number; price: string; convenience: number;
@@ -240,6 +244,7 @@ export default function Home() {
               : ratingTarget === place.id ? <div className="visit-rating"><span>어떠셨나요?</span><button type="button" onClick={() => submitFeedback(place.id, "liked")}>좋아요</button><button type="button" onClick={() => submitFeedback(place.id, "disliked")}>별로예요</button></div>
               : <button className="visit-button" type="button" onClick={() => setRatingTarget(place.id)}>다녀왔어요</button>}
             <a href={place.url} target="_blank" rel="noreferrer">공식 정보 확인 <span aria-hidden="true">↗</span></a>
+            <a href={naverMapSearchUrl(place.title)} target="_blank" rel="noreferrer">네이버 지도에서 후기 보기 <span aria-hidden="true">↗</span></a>
           </div>
         </article>)}
       </div>
