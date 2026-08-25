@@ -11,5 +11,6 @@ test("ranks an age-fit nearby place first and uses selected origin", () => {
   const ranked = rankPlaces(places, 18, "고덕동");
   assert.equal(ranked[0].id, "near-fit");
   assert.equal(ranked[0].driveMinutes, 5);
+  assert.equal(ranked[0].reason, "고덕동에서 가까워 짧게 다녀오기 좋아요");
   assert.ok(ranked[0].score > ranked[2].score);
 });
