@@ -25,11 +25,13 @@ export async function POST(request: Request) {
   }
 
     // ponytail: 좌표를 요청마다 찾는다. 사용량이 늘면 장소 좌표를 데이터에 저장한다.
-    const [origin, ...destinations] = await Promise.all([point(originQueries[body.origin], key), ...places.map((place: { query:string }) => point(place.query.slice(0, 80), key))]);
+    const origin = await point(originQueries[body.origin], key);
+    const points = await Promise.allSettled(places.map((place: { query:string }) => point(place.query.slice(0, 80), key)));
+    const destinations = points.flatMap((result, index) => result.status === "fulfilled" ? [{ ...result.value, key:places[index].id }] : []);
     const response = await fetch("https://apis-navi.kakaomobility.com/v1/destinations/directions", {
       method:"POST",
       headers:{ Authorization:"KakaoAK " + key, "Content-Type":"application/json" },
-      body:JSON.stringify({ origin, destinations:destinations.map((destination, index) => ({ ...destination, key:places[index].id })), radius:10000, priority:"TIME" })
+      body:JSON.stringify({ origin, destinations, radius:10000, priority:"TIME" })
     });
     if (!response.ok) console.error("Kakao Mobility status", response.status);
     if (!response.ok) throw new Error("길찾기 실패");
