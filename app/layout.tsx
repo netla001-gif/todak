@@ -17,5 +17,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ko"><body>{children}</body></html>;
+  return <html lang="ko"><body>{children}<footer className="policy-footer"><nav aria-label="개인정보 안내"><a href="/privacy">개인정보처리방침</a><a href="/data-deletion">데이터 삭제 안내</a><a href="mailto:netla@naver.com">문의</a></nav></footer></body></html>;
 }

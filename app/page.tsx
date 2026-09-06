@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { rankPlaces } from "@/lib/recommendation.mjs";
+import PlaceRecommendations from './threads/PlaceRecommendations';
 
 type Category = "all" | "indoor" | "outdoor" | "free";
 type Rating = "liked" | "disliked";
@@ -192,6 +193,7 @@ export default function Home() {
       <p>강동구에서 시작하는 아기 나들이</p>
     </header>
 
+    <PlaceRecommendations />
     <section className="hero" id="top">
       <div className="hero-copy">
         <p className="eyebrow">이번 주말 고민, 10초 만에 끝</p>
@@ -249,6 +251,7 @@ export default function Home() {
           </div>
         </article>)}
       </div>
+      <a className="threads-home-link" href="/threads">Threads에서 나들이 글 찾아보기 ↗</a>
       <p className="data-note">피드는 현재 위치와 장소의 직선거리로 빠르게 정렬하며, 위치는 서버에 저장하지 않아요. 실제 자차 시간은 원하는 카드에서 눌렀을 때만 카카오 길찾기로 확인합니다. 운영시간과 예약 가능 여부는 방문 전 공식 페이지에서 확인해 주세요.</p>
     </section>
   </main>;

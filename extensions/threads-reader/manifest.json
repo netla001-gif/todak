@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "토닥 · Threads 나들이 읽기",
+  "version": "0.1.0",
+  "description": "직접 연 Threads 검색 화면의 글을 기기 안에서 읽고 나들이 관련성순으로 정렬합니다.",
+  "permissions": ["activeTab", "scripting"],
+  "action": { "default_popup": "popup.html", "default_title": "토닥으로 Threads 검색 결과 읽기" },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'" }
+}

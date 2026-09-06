@@ -1,0 +1,8 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>토닥 · Threads 나들이 읽기</title><link rel="stylesheet" href="popup.css"></head><body>
+<header><strong>토닥</strong><h1>Threads 나들이 읽기</h1></header>
+<form id="search"><label for="query">지역·장소·검색어</label><input id="query" value="하남 아이랑" minlength="2" maxlength="60" required><button type="submit">Threads 검색 화면 열기</button></form>
+<p class="hint">검색 결과가 뜨면 이 도구를 다시 눌러 주세요. 화면을 더 내려 글을 불러온 뒤 ‘다시 읽기’를 누를 수도 있어요.</p>
+<div class="controls"><label for="sort">정렬</label><select id="sort"><option value="relevant">나들이 관련성순</option><option value="recent">최신순</option></select><button id="read" type="button">현재 화면 다시 읽기</button></div>
+<p id="status" role="status" aria-live="polite"></p><p id="source" class="hint"></p><main id="results"></main>
+<footer>현재 검색 화면에 로드된 글 최대 50건을 읽어 최대 30건을 표시합니다. 검색어 일치·나들이·이용 정보·최신성으로 정렬하며 광고 문구는 감점합니다. 전체 검색 결과나 장소의 안전성을 보장하지 않습니다. 로그인 정보와 글은 외부 서버로 전송하지 않으며 창을 닫으면 결과가 사라집니다.</footer>
+<script type="module" src="popup.mjs"></script></body></html>
